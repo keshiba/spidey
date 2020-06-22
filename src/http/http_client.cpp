@@ -1,8 +1,8 @@
 #include <iostream>
 #include <memory>
 #include <boost/asio.hpp>
-#include "http_client.h"
-#include "appexception.h"
+#include "http/http_client.h"
+#include "exceptions/appexception.h"
 
 namespace http {
 

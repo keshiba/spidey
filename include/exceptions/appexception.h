@@ -37,33 +37,11 @@ namespace appex {
         
         /// what() constucts an error description for this
         /// particular exception
-        const char* what() const throw();
+        const char* 
+        what() const throw();
 
-        /// GetExceptionMessage returns a proper error message
-        /// for each message type (appex::AppExceptionType)
-        static std::string GetExceptionMessage(appex::AppExceptionType type) {
-
-            std::string exception_message = "";
-
-            switch(type) {
-                case appex::InvalidTargetIp:
-                    exception_message = "Target ip is invalid";
-                    break;
-                case appex::InvalidTargetPort:
-                    exception_message = "Target port is invalid";
-                    break;
-                case appex::UnreachableTargetHost:
-                    exception_message = "Host unreachable";
-                    break;
-                case appex::UnreachableTargetPort:
-                    exception_message = "Port is not reachable on host";
-                    break;
-                default:
-                    exception_message = "Generic error";
-            }
-
-            return exception_message;
-        }
+        static std::string 
+        GetExceptionMessage(appex::AppExceptionType type);
     };
 }
 

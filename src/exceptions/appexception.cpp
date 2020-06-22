@@ -34,3 +34,30 @@ const char* appex::AppException::what() const throw () {
 
     return message.c_str();
 }
+
+
+/// GetExceptionMessage returns a proper error message
+/// for each message type (appex::AppExceptionType)
+std::string appex::AppException::GetExceptionMessage(appex::AppExceptionType type) {
+
+    std::string exception_message = "";
+
+    switch(type) {
+        case appex::InvalidTargetIp:
+            exception_message = "Target ip is invalid";
+            break;
+        case appex::InvalidTargetPort:
+            exception_message = "Target port is invalid";
+            break;
+        case appex::UnreachableTargetHost:
+            exception_message = "Host unreachable";
+            break;
+        case appex::UnreachableTargetPort:
+            exception_message = "Port is not reachable on host";
+            break;
+        default:
+            exception_message = "Generic error";
+    }
+
+    return exception_message;
+}
