@@ -43,17 +43,17 @@ std::string appex::AppException::GetExceptionMessage(appex::AppExceptionType typ
     std::string exception_message = "";
 
     switch(type) {
-        case appex::InvalidTargetIp:
+        case appex::AppExceptionType::InvalidTargetIp:
             exception_message = "Target ip is invalid";
             break;
-        case appex::InvalidTargetPort:
+        case appex::AppExceptionType::InvalidTargetPort:
             exception_message = "Target port is invalid";
             break;
-        case appex::UnreachableTargetHost:
+        case appex::AppExceptionType::UnreachableTargetHost:
             exception_message = "Host unreachable";
             break;
-        case appex::UnreachableTargetPort:
-            exception_message = "Port is not reachable on host";
+        case appex::AppExceptionType::ConnectionRefused:
+            exception_message = "Connection refused by host";
             break;
         default:
             exception_message = "Generic error";

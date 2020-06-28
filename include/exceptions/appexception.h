@@ -7,12 +7,12 @@ namespace appex {
     /// AppExceptionType enum holds all the high-level exceptions
     /// that occur in the application which will be notified back
     /// to the user
-    enum AppExceptionType {
+    enum class AppExceptionType {
 
         InvalidTargetIp = 1,
         InvalidTargetPort = 2,
         UnreachableTargetHost = 3,
-        UnreachableTargetPort = 4
+        ConnectionRefused = 4
     };
 
     /// AppException is a generic exception container

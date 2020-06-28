@@ -1,4 +1,5 @@
 #include <iostream>
+#include <regex>
 #include <exception>
 #include <string.h>
 #include <cstdlib>
@@ -9,36 +10,24 @@ spidey::CliArgs ParseCliArgs(int argc, char** argv) {
 
     spidey::CliArgs args;
 
-    if (argc != 3) {
+    if (argc != 2) {
         args.is_parse_successful = false;
         args.parse_error = "missing arguments";
         
         return args;
     }
 
-    size_t ip_arg_len = strlen(argv[1]);
-    if (ip_arg_len == 0 || ip_arg_len > 50) {
-        args.is_parse_successful = false;
-        args.parse_error = "invalid ip-address";
+    std::string host_url = argv[1];
+    std::regex url_regex("^((http[s]?):\\/\\/)?([a-zA-Z0-9-.]+)(:(\\d+))?(\\/(.*))?$");
 
-        return args;
+    if (std::regex_search(host_url, url_regex)) {
+        args.target_url = host_url;
+        args.is_parse_successful = true;
     }
     else {
-        args.target_ip = argv[1];
-    }
-
-    size_t port_arg_len = strlen(argv[2]);
-    if (port_arg_len == 0 || port_arg_len > 5) {
         args.is_parse_successful = false;
-        args.parse_error = "invalid port";
-
-        return args;
+        args.parse_error = "invalid host URL";
     }
-    else {
-        args.target_port = (unsigned short) strtoul(argv[2], NULL, 0);
-    }
-
-    args.is_parse_successful = true;
 
     return args;
 }
@@ -48,7 +37,7 @@ void PrintUsage(std::string const& parse_error, char* app_name) {
     std::cout << parse_error
               << std::endl
               << "Usage: " << app_name
-              << " <ip-address> <port>"
+              << " <url>"
               << std::endl;
 }
 

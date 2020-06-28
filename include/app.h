@@ -6,9 +6,7 @@ namespace spidey {
     /// CliArgs holds the arguments passed when invoking the application
     struct CliArgs {
 
-        std::string target_ip;
-
-        unsigned short target_port;
+        std::string target_url;
 
         bool is_parse_successful;
 

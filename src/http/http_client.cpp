@@ -1,5 +1,9 @@
 #include <iostream>
+#include <algorithm>
+#include <regex>
 #include <memory>
+#include <sstream>
+#include <cstdlib>
 #include <boost/asio.hpp>
 #include "http/http_client.h"
 #include "exceptions/appexception.h"
@@ -8,11 +12,12 @@ namespace http {
 
     using namespace boost::asio;
 
-    void HttpClient::HttpGet(std::string ip_address_str, unsigned short port) {
+    void HttpClient::HttpGet(std::string url) throw () {
 
-        auto socket = GetSocketConnection(ip_address_str, port);
-         
-        std::string get_request = ConstructGetRequest();
+        auto urlInfo = ParseUrl(url);
+        auto socket = GetSocketConnection(urlInfo);
+        auto get_request = ConstructGetRequest(urlInfo);
+
         this->Send(&socket, get_request);
 
         auto data = this->Receive(&socket); 
@@ -50,6 +55,9 @@ namespace http {
         boost::system::error_code error;
         auto send_buffer = boost::asio::buffer(data);
 
+        std::cout << "Request: " << std::endl
+                  << data << std::endl;
+
         boost::asio::write(*socket, send_buffer, error);
 
         if (error) {
@@ -63,33 +71,98 @@ namespace http {
         }
     }
 
-    std::string HttpClient::ConstructGetRequest() {
+    std::string HttpClient::ConstructGetRequest(UrlInfo urlInfo) {
 
-        std::string get_request = "GET /index HTTP/1.1\r\n\r\nHost:localhost\r\n\r\n";
+        std::stringstream request_generator;
 
-        return get_request;
+        request_generator << "GET " << urlInfo.resource << " HTTP/1.0" << "\r\n"
+                          << "Host: " << urlInfo.hostname << "\r\n\r\n";
+                          
+        return request_generator.str();
     }
 
-    ip::tcp::socket HttpClient::GetSocketConnection(std::string ip_address_str, unsigned short port) {
+    ip::tcp::socket HttpClient::GetSocketConnection(UrlInfo urlInfo) {
 
-        io_service io_service;
-        ip::tcp::socket socket(io_service);
+        auto ip_address_str = ResolveNameToIp(urlInfo.hostname, urlInfo.service);
+        urlInfo.host_ip = ip_address_str;
 
-        auto ip_address = ip::address::from_string(ip_address_str);
+        auto ip_address = ip::address::from_string(urlInfo.host_ip);
+        unsigned short port = urlInfo.port;
         auto target_endpoint = ip::tcp::endpoint(ip_address, port);
+        ip::tcp::socket socket(this->io_service);
 
         try {
             socket.connect(target_endpoint);
         }
         catch(boost::system::system_error boost_sys_err) {
-            std::cout << "Unable to connect to target"
-                      << std::endl
-                      << boost_sys_err.what()
-                      << std::endl;
             
+            std::cout << boost_sys_err.what() << std::endl;
             throw new appex::AppException(appex::AppExceptionType::UnreachableTargetHost);
         }
 
         return socket;
+    }
+
+    HttpClient::UrlInfo HttpClient::ParseUrl(std::string url) {
+        
+        std::smatch match;
+        std::regex url_regex("^((http[s]?):\\/\\/)?([a-zA-Z0-9-.]+)(:(\\d+))?(\\/(.*))?$");
+        UrlInfo urlInfo;
+
+        if (std::regex_search(url, match, url_regex)) {
+
+            std::string hostname = match[3];
+            urlInfo.hostname = (hostname == "") ? "localhost" : hostname;
+            
+            unsigned short port = strtoul(match[5].str().c_str(), NULL, 0);
+            urlInfo.port = (port == 0) ? 80 : port;
+
+            std::string resource = match[6];
+            urlInfo.resource = (resource == "") ? "/" : resource;
+            
+            std::string service_str = match[2].str();
+            if (service_str != "") {
+                std::transform(service_str.begin(), service_str.end(), 
+                                service_str.begin(), ::tolower);
+            }
+            else {
+                service_str = "http";
+            }
+            urlInfo.service = service_str;
+
+            urlInfo.is_valid = true;
+        }
+
+        return urlInfo;
+    }
+
+    std::string HttpClient::ResolveNameToIp(const std::string& host_name, const std::string& service) {
+
+        auto protocol = ip::tcp::v4();
+        ip::tcp::resolver name_resolver(this->io_service);
+        ip::tcp::resolver::query query(protocol, host_name, service, ip::tcp::resolver::query::canonical_name);
+        boost::system::error_code resolution_error;
+        std::string ip_address_str;
+
+        ip::tcp::resolver::iterator ip_resolve_iter = name_resolver.resolve(query, resolution_error); 
+
+        if (resolution_error) {
+            std::cout << "Unable to resolve name to ip: "
+                      << resolution_error.message()
+                      << std::endl;
+        }
+        else {
+            boost::system::error_code address_error;
+
+            ip_address_str = ip_resolve_iter->endpoint().address().to_v4().to_string(address_error);
+
+            if (address_error) {
+                std::cout << "Unable to convert address to string"
+                            << address_error.message()
+                            << std::endl;
+            }
+        }
+
+        return ip_address_str;
     }
 }
