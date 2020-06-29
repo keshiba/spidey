@@ -12,7 +12,10 @@ namespace appex {
         InvalidTargetIp = 1,
         InvalidTargetPort = 2,
         UnreachableTargetHost = 3,
-        ConnectionRefused = 4
+        ConnectionRefused = 4,
+        RedirectionLimitExceeded = 5,
+        RedirectionLoopDetected = 6,
+        SendDataFailed = 7
     };
 
     /// AppException is a generic exception container

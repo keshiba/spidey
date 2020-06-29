@@ -1,10 +1,13 @@
 #include <iostream>
 #include <algorithm>
+#include <unordered_set>
 #include <regex>
 #include <memory>
 #include <sstream>
 #include <cstdlib>
+#include <string>
 #include <boost/asio.hpp>
+#include <boost/algorithm/string.hpp>
 #include "http/http_client.h"
 #include "exceptions/appexception.h"
 
@@ -12,18 +15,118 @@ namespace http {
 
     using namespace boost::asio;
 
-    void HttpClient::HttpGet(std::string url) throw () {
+    std::shared_ptr<HttpClient::HttpResponse> HttpClient::HttpGet(const std::string& url) throw () {
 
-        auto urlInfo = ParseUrl(url);
-        auto socket = GetSocketConnection(urlInfo);
-        auto get_request = ConstructGetRequest(urlInfo);
+        unsigned int redirection_counter = 100;
+        std::shared_ptr<HttpClient::HttpResponse> http_response;
+        HttpClient::UrlInfo urlInfo = ParseUrl(url);
+        std::unordered_set<std::string> redirection_history;
+        redirection_history.insert(url);
 
-        this->Send(&socket, get_request);
+        while (redirection_counter-- > 0) {
 
-        auto data = this->Receive(&socket); 
+            auto socket = GetSocketConnection(urlInfo);
+            auto get_request = ConstructGetRequest(urlInfo);
 
-        std::cout << data.length() << " characters received" << std::endl;
-        std::cout << data << std::endl;
+            bool is_send_successful = this->Send(&socket, get_request);
+            if (is_send_successful) {
+
+                auto data = this->Receive(&socket); 
+
+                http_response = ParseHttpResponse(data);
+                if (http_response->status_code < 300 || http_response->status_code > 310) {
+                    break;
+                }
+                else {
+
+                    if (redirection_history.find(http_response->location) != redirection_history.end()) {
+                        throw new appex::AppException(appex::AppExceptionType::RedirectionLoopDetected);
+                    }
+                    else {
+                        redirection_history.insert(http_response->location);
+                    }
+
+                    urlInfo = ParseUrl(http_response->location);
+                    std::cout << "Redirecting to " << http_response->location << std::endl;
+                }
+            }
+            else {
+                throw new appex::AppException(appex::AppExceptionType::SendDataFailed);
+            }
+        }
+
+        if (redirection_counter == 0) {
+            throw new appex::AppException(appex::AppExceptionType::RedirectionLimitExceeded);
+        }
+
+        return http_response;
+    }
+
+    std::shared_ptr<HttpClient::HttpResponse> HttpClient::ParseHttpResponse(const std::string& data) {
+
+        typedef boost::split_iterator<std::string::const_iterator> split_iterator;
+        auto http_response = std::make_shared<HttpClient::HttpResponse>();
+        std::string delim("\r\n");
+        bool parse_body = false;
+
+        split_iterator it = 
+            boost::make_split_iterator(data, boost::first_finder(delim, boost::is_equal()));
+        
+        std::string status_line = boost::copy_range<std::string>(*it);
+        std::size_t http_status_pos = status_line.find(" ");
+        std::string http_status_str = status_line.substr(0, http_status_pos);
+        http_response->http_version = http_status_str;
+
+        std::size_t status_code_pos = status_line.find(" ", http_status_str.length() + 1);
+        std::string status_code_str = status_line.substr(http_status_pos + 1, status_code_pos);
+        http_response->status_code = strtoul(status_code_str.c_str(), NULL, 0);
+        http_response->status_message = status_line.substr(status_code_pos + 1, std::string::npos);
+
+        std::string body_str;
+
+        ++it;
+        for(; it != split_iterator(); ++it) {
+
+            std::string data_line = boost::copy_range<std::string>(*it);
+
+            if (data_line == "") {
+                parse_body = true;
+            }
+
+            if (parse_body) {
+                body_str += data_line;
+            }
+            else {
+                std::size_t key_pos = data_line.find_first_of(":");
+
+                if (key_pos != std::string::npos) {
+                    std::string key = data_line.substr(0, key_pos);
+                    std::string value = data_line.substr(key_pos + 1, std::string::npos);
+                    boost::trim(key);
+                    boost::trim(value);
+
+                    if (key == "Location") {
+                        http_response->location = value;
+                    }
+                    else if (key == "Content-Type") {
+                        http_response->content_type = value;
+                    }
+                    else if (key == "Date") {
+                        http_response->response_date = value;
+                    }
+                    else if (key == "Expires") {
+                        http_response->expiry_date = value;
+                    }
+                    else if (key == "Content-Length") {
+                        http_response->content_length = strtoull(value.c_str(), NULL, 0);
+                    }
+                }
+            }
+        }
+
+        http_response->data = body_str;
+
+        return http_response;
     }
 
     std::string HttpClient::Receive(ip::tcp::socket* socket) {
@@ -50,7 +153,7 @@ namespace http {
         return receive_str;
     }
 
-    void HttpClient::Send(ip::tcp::socket* socket, std::string const& data) {
+    bool HttpClient::Send(ip::tcp::socket* socket, std::string const& data) {
 
         boost::system::error_code error;
         auto send_buffer = boost::asio::buffer(data);
@@ -62,13 +165,13 @@ namespace http {
 
         if (error) {
             std::cout << "Send failed: " 
-                    << error.message()
-                    << std::endl;
+                      << error.message()
+                      << std::endl;
+
+            return false;
         }
-        else {
-            std::cout << "Sent message successfully"
-                    << std::endl;
-        }
+
+        return true;
     }
 
     std::string HttpClient::ConstructGetRequest(UrlInfo urlInfo) {
@@ -103,7 +206,7 @@ namespace http {
         return socket;
     }
 
-    HttpClient::UrlInfo HttpClient::ParseUrl(std::string url) {
+    HttpClient::UrlInfo HttpClient::ParseUrl(const std::string& url) {
         
         std::smatch match;
         std::regex url_regex("^((http[s]?):\\/\\/)?([a-zA-Z0-9-.]+)(:(\\d+))?(\\/(.*))?$");
@@ -164,5 +267,19 @@ namespace http {
         }
 
         return ip_address_str;
+    }
+
+    std::ostream& operator<<(std::ostream& out, const HttpClient::HttpResponse& http_response) {
+        out << "HttpResponse : {" << std::endl
+            << "\tHttp-Version: " << http_response.http_version << std::endl
+            << "\tStatus: " << http_response.status_code << std::endl
+            << "\tStatus-Message: " << http_response.status_message << std::endl
+            << "\tLocation: " << http_response.location << std::endl
+            << "\tContent-Type: " << http_response.content_type << std::endl
+            << "\tContent-Length: " << http_response.content_length << std::endl
+            << "\tDate: " << http_response.response_date << std::endl
+            << "\tExpires: " << http_response.expiry_date << std::endl
+            << "\tData: " << http_response.data << std::endl
+            << "}" << std::endl;
     }
 }

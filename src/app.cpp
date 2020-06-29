@@ -11,7 +11,8 @@ namespace spidey {
         http::HttpClient http_client;
 
         try {
-            http_client.HttpGet(args.target_url);
+            auto http_response = http_client.HttpGet(args.target_url);
+            std::cout << *http_response << std::endl;
         }
         catch(appex::AppException app_ex) {
             std::cout << "Failure: " << app_ex.what()

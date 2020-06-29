@@ -2,6 +2,8 @@
 #define HTTP_CLIENT_H
 
 #include <string>
+#include <memory>
+#include <sstream>
 #include <boost/asio.hpp>
 
 namespace http {
@@ -10,6 +12,7 @@ namespace http {
 
         public:
         struct UrlInfo;
+        class HttpResponse;
 
         protected:
 
@@ -19,14 +22,17 @@ namespace http {
         static std::string
         ConstructGetRequest(UrlInfo urlInfo);
         
-        void 
+        bool 
         Send(boost::asio::ip::tcp::socket* socket, std::string const& data);
 
         std::string 
         Receive(boost::asio::ip::tcp::socket* socket);
 
         UrlInfo
-        ParseUrl(std::string url);
+        ParseUrl(const std::string& url);
+
+        std::shared_ptr<HttpResponse>
+        ParseHttpResponse(const std::string& data);
 
         std::string
         ResolveNameToIp(const std::string& host_name, const std::string& protocol);
@@ -51,9 +57,33 @@ namespace http {
             bool is_valid;
         };
 
+        class HttpResponse {
+
+            public:
+            std::string http_version;
+
+            unsigned short status_code;
+
+            std::string status_message;
+
+            std::string location;
+
+            std::string content_type;
+
+            std::string response_date;
+
+            std::string expiry_date;
+
+            unsigned long long content_length;
+
+            std::string data;
+
+            friend std::ostream& operator<<(std::ostream& out, const HttpResponse& http_response);
+        };
+
         /// HttpGet() sends a GET request to the target
-        void 
-        HttpGet(std::string url) throw ();
+        std::shared_ptr<HttpClient::HttpResponse>
+        HttpGet(const std::string& url) throw ();
     };
 
 }
