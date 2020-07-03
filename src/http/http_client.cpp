@@ -178,8 +178,10 @@ namespace http {
 
         std::stringstream request_generator;
 
-        request_generator << "GET " << urlInfo.resource << " HTTP/1.0" << "\r\n"
-                          << "Host: " << urlInfo.hostname << "\r\n\r\n";
+        request_generator << "GET " << urlInfo.resource << " HTTP/1.1" << "\r\n"
+                          << "Host: " << urlInfo.hostname << "\r\n"
+                          << "Accept: */*" << "\r\n"
+                          << "Connection: close" << "\r\n\r\n";
                           
         return request_generator.str();
     }
